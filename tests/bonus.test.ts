@@ -7,6 +7,29 @@ import { createRequire } from 'node:module';
 const load = async (file: string) => JSON.parse(await readFile(new URL(`../n8n/${file}`, import.meta.url), 'utf8'));
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 
+test('failure notification handles execution errors and trigger-only errors', async () => {
+  const workflow = await load('error-notification.json');
+  const source = workflow.nodes.find((n: { name: string }) => n.name === 'Notify failure').parameters.jsonBody;
+  const evaluate = new Function('$json', `return (${source.slice(3, -2)});`);
+  const execution = JSON.parse(evaluate({
+    workflow: { name: 'Order sync' },
+    execution: { id: '123', url: 'https://example.com/execution/123', lastNodeExecuted: 'Upsert deal' },
+  }));
+  assert.equal(execution.execution_id, '123');
+  assert.equal(execution.failed_node, 'Upsert deal');
+  const trigger = JSON.parse(evaluate({
+    workflow: { name: 'Order sync' },
+    trigger: { error: { name: 'WorkflowActivationError', node: { name: 'Order webhook' } }, mode: 'trigger' },
+  }));
+  assert.equal(trigger.event, 'order_sync.failed');
+  assert.equal(trigger.workflow, 'Order sync');
+  assert.equal(trigger.execution_id, null);
+  assert.equal(trigger.execution_url, null);
+  assert.equal(trigger.failed_node, 'Order webhook');
+  const minimal = JSON.parse(evaluate({ workflow: { name: 'Order sync' }, trigger: { error: {} } }));
+  assert.equal(minimal.failed_node, null);
+});
+
 test('n8n validates raw-body HMAC and rejects invalid signatures and payloads', async () => {
   const workflow = await load('order-sync.json');
   const code = workflow.nodes.find((n: { name: string }) => n.name === 'Validate order').parameters.jsCode;

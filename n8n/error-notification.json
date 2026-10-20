@@ -27,7 +27,7 @@
         "url": "={{ $env.N8N_FAILURE_WEBHOOK_URL }}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ event: 'order_sync.failed', workflow: $json.workflow.name, execution_id: $json.execution.id || null, execution_url: $json.execution.url || null, failed_node: $json.execution.lastNodeExecuted || null }) }}",
+        "jsonBody": "={{ JSON.stringify({ event: 'order_sync.failed', workflow: $json.workflow.name, execution_id: $json.execution?.id ?? null, execution_url: $json.execution?.url ?? null, failed_node: $json.execution?.lastNodeExecuted ?? $json.trigger?.error?.node?.name ?? null }) }}",
         "options": {
           "timeout": 10000
         }

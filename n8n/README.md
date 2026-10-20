@@ -83,7 +83,7 @@ Failed automatic execution
 
 Batch upserts allow create-or-update behavior without separate search/create races. Because HubSpot enforces uniqueness on the Deal's order-ID property, the same create-or-update operation can be safely retried. HTTP nodes have four total attempts separated by two seconds, and 15-second timeouts. These native n8n retries use a fixed delay, separate from the main app's exponential backoff. Partial batch errors are checked before continuing.
 
-The error notification includes the workflow name, execution ID/URL and last node. It does not include the API token, customer payload or raw API error body. Handled invalid-input responses are not failed executions and therefore do not notify.
+The error notification includes the workflow name, execution ID/URL and last node. It also handles trigger/activation errors, which may have no execution object: execution fields become `null`, and the trigger's node name is used when available. It does not include the API token, customer payload or raw API error body. Handled invalid-input responses are not failed executions and therefore do not notify.
 
 This bonus upserts records for duplicate deliveries; unlike the main app's first-payload-wins policy, a changed payload for the same order ID updates the existing Deal and Contact. It does not add dashboard/database functionality to n8n.
 

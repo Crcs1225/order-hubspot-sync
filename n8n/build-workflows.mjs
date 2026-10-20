@@ -73,7 +73,7 @@ const errors = { name: 'Stage 2 - Failure notification', active: false, nodes: [
   node('Workflow failure', 'errorTrigger', 1, [0, 0], {}),
   node('Notify failure', 'httpRequest', 4.2, [240, 0], {
     method: 'POST', url: '={{ $env.N8N_FAILURE_WEBHOOK_URL }}', sendBody: true, specifyBody: 'json',
-    jsonBody: `={{ JSON.stringify({ event: 'order_sync.failed', workflow: $json.workflow.name, execution_id: $json.execution.id || null, execution_url: $json.execution.url || null, failed_node: $json.execution.lastNodeExecuted || null }) }}`,
+    jsonBody: `={{ JSON.stringify({ event: 'order_sync.failed', workflow: $json.workflow.name, execution_id: $json.execution?.id ?? null, execution_url: $json.execution?.url ?? null, failed_node: $json.execution?.lastNodeExecuted ?? $json.trigger?.error?.node?.name ?? null }) }}`,
     options: { timeout: 10000 },
   }, { retryOnFail: true, maxTries: 3, waitBetweenTries: 2000 }),
 ], connections: { 'Workflow failure': { main: [[edge('Notify failure')]] } }, settings: { executionOrder: 'v1' } };
