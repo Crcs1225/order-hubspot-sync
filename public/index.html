@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Order syncs</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main>
+    <header><div><p class="eyebrow">STORE → HUBSPOT</p><h1>Order syncs</h1><p>The latest 50 attempts. Times are shown in your local timezone.</p></div><button id="refresh">Refresh</button></header>
+    <p id="message" role="status" aria-live="polite">Loading sync attempts…</p>
+    <div class="table-wrap">
+      <table><caption class="sr-only">Recent order sync attempts</caption><thead><tr><th>Order</th><th>Status</th><th>Contact ID</th><th>Deal ID</th><th>Time</th><th>Error</th><th>Action</th></tr></thead><tbody id="attempts"></tbody></table>
+    </div>
+    <p class="footer">Failed attempts can be retried after the underlying issue is fixed. Refreshes every 10 seconds.</p>
+  </main>
+</body>
+</html>
