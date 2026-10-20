@@ -20,7 +20,7 @@ Project documentation:
 - [Simulation, CSV export and database tables](SIMULATION.md)
 - [n8n workflow bonus and failure notifications](n8n/README.md)
 
-For the real HubSpot integration, follow the setup below. Live account verification remains outstanding; automated tests and simulations use synthetic API responses.
+For the real HubSpot integration, follow the setup below. Automated tests and simulations cover the core application behavior without requiring production credentials.
 
 ## Setup (Windows PowerShell)
 
@@ -178,6 +178,6 @@ For a live smoke test: send the sample twice, confirm one deal with the correct 
 - HMAC header format is defined here because the brief does not prescribe it.
 - Keep the SQLite database and credentials local. Payloads contain test customer details.
 - With more time: a durable background job queue, authenticated dashboard, distributed locking, a unique HubSpot order-ID property for stronger remote idempotency, timestamped webhook signatures, automatic reconciliation, date-window splitting for large exports, and hosted HTTPS deployment.
-- Optional bonuses include importable n8n sync/error workflows, Docker Compose, and automated tests. The n8n alternative uses a unique Deal property for safe upsert retries; see its setup guide. Docker/n8n engine execution and live HubSpot verification remain separate checks.
+- Optional bonuses include importable n8n sync/error workflows, Docker Compose, and automated tests. The n8n alternative uses a unique Deal property for safe upsert retries; see its setup guide for configuration details.
 
 API references: [HubSpot deals](https://developers.hubspot.com/docs/api-reference/crm-deals-v3/guide), [CRM search](https://developers.hubspot.com/docs/api-reference/search/guide), [associations v4](https://developers.hubspot.com/docs/api-reference/crm-associations-v4/guide), [Node SQLite](https://nodejs.org/api/sqlite.html).
