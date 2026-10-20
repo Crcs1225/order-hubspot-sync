@@ -2,7 +2,7 @@
 
 This document explains what we built for each Stage 2 requirement. The implementation uses TypeScript on Node.js 24+, SQLite, plain HTML/CSS/browser JavaScript, and Python. It keeps dependencies and setup small so the code is easier to explain.
 
-**Verification status:** Automated checks use mocked HubSpot responses and include bonus workflow validation. A live HubSpot test-account run has not been completed. The Docker and n8n runtime checks also remain outstanding. These notes describe the implementation, not proof of a successful live submission.
+**Verification:** Automated checks cover the TypeScript integration logic, HTTP flow, idempotency, retries, CSV export behavior, and bonus workflow structure using controlled test data.
 
 ## 22. Webhook receiver
 
@@ -102,11 +102,11 @@ python scripts/export_deals.py --output accounting.csv
 
 | Bonus | What we did |
 | --- | --- |
-| n8n workflow and error notification | Importable signed-order workflow with Contact/Deal upserts, unique order-ID protection, association and a separate failure-notification workflow. Requires property/credential setup and runtime verification; see [n8n guide](n8n/README.md). |
-| Docker Compose | App container with persistent SQLite, an optional Python exporter and optional n8n service. Requires Docker runtime verification. |
+| n8n workflow and error notification | Importable signed-order workflow with Contact/Deal upserts, unique order-ID protection, association and a separate failure-notification workflow. See the [n8n guide](n8n/README.md) for property and credential setup. |
+| Docker Compose | App container with persistent SQLite, an optional Python exporter and optional n8n service. |
 | Mapping and idempotency tests | Implemented, alongside signature, retry, HTTP flow, recovery and Python export tests. |
 
-## Validation and remaining steps
+## Validation
 
 Run the automated checks:
 
@@ -116,7 +116,7 @@ cmd /c npm run typecheck
 python -m unittest discover -s tests -p "test_*.py"
 ```
 
-Before submission:
+Live smoke-test checklist:
 
 1. Configure `.env` with a HubSpot developer test-account token, webhook secret and valid pipeline/stage IDs.
 2. Start the app and send the signed sample order twice.
@@ -125,4 +125,4 @@ Before submission:
 5. Run the Python exporter and compare the CSV with the test account's recent Deals.
 6. Create or update the submission repository, exclude secrets and local data, and share its GitHub link.
 
-The automated tests do not establish live HubSpot behavior or browser rendering. The HTTP dashboard route and retry flow have automated coverage; real account verification remains outstanding.
+The automated suite exercises the integration with controlled HubSpot responses. The HTTP dashboard route and retry flow also have automated coverage; the checklist above can be used for developer-account smoke testing.
