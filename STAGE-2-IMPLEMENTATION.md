@@ -2,7 +2,7 @@
 
 This document explains what we built for each Stage 2 requirement. The implementation uses TypeScript on Node.js 24+, SQLite, plain HTML/CSS/browser JavaScript, and Python. It keeps dependencies and setup small so the code is easier to explain.
 
-**Verification status:** The last completed checks passed 11 TypeScript tests, 3 Python tests and TypeScript type checking. Tests mock HubSpot; a live HubSpot test-account run has not been completed. These notes describe the implementation, not proof of a successful live submission.
+**Verification status:** Automated checks use mocked HubSpot responses and include bonus workflow validation. A live HubSpot test-account run has not been completed. The Docker and n8n runtime checks also remain outstanding. These notes describe the implementation, not proof of a successful live submission.
 
 ## 22. Webhook receiver
 
@@ -102,8 +102,8 @@ python scripts/export_deals.py --output accounting.csv
 
 | Bonus | What we did |
 | --- | --- |
-| n8n workflow and error notification | Not implemented. |
-| Docker Compose | Not implemented. |
+| n8n workflow and error notification | Importable signed-order workflow with Contact/Deal upserts, unique order-ID protection, association and a separate failure-notification workflow. Requires property/credential setup and runtime verification; see [n8n guide](n8n/README.md). |
+| Docker Compose | App container with persistent SQLite, an optional Python exporter and optional n8n service. Requires Docker runtime verification. |
 | Mapping and idempotency tests | Implemented, alongside signature, retry, HTTP flow, recovery and Python export tests. |
 
 ## Validation and remaining steps

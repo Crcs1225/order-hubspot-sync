@@ -7,7 +7,8 @@ const order = JSON.parse(await readFile(new URL('./sample-order.json', import.me
 if (process.argv[2]) order.order_id = process.argv[2];
 const body = JSON.stringify(order);
 const signature = createHmac('sha256', secret).update(body).digest('hex');
-const response = await fetch(`http://127.0.0.1:${process.env.PORT ?? 3000}/webhooks/orders`, {
+const target = process.argv[3] ?? `http://127.0.0.1:${process.env.PORT ?? 3000}/webhooks/orders`;
+const response = await fetch(target, {
   method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Webhook-Signature': signature },
   body, signal: AbortSignal.timeout(180000),
 });

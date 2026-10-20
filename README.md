@@ -18,6 +18,7 @@ Project documentation:
 - [Stage 2 requirements](STAGE-2-REQUIREMENTS.md)
 - [Implementation answers and limitations](STAGE-2-IMPLEMENTATION.md)
 - [Simulation, CSV export and database tables](SIMULATION.md)
+- [n8n workflow bonus and failure notifications](n8n/README.md)
 
 For the real HubSpot integration, follow the setup below. Live account verification remains outstanding; automated tests and simulations use synthetic API responses.
 
@@ -63,9 +64,32 @@ cmd /c npm run send-order -- ORD-10483
 
 `npm start` and the sender load `.env` automatically. Use `cmd /c` in PowerShell if execution policy blocks `npm.ps1`. Node may emit an experimental SQLite warning; SQLite is built into Node 24.
 
-## How it works
+## Docker Compose bonus
 
-To try the app without credentials, run `cmd /c npm run simulate`. See the [simulation and SQLite guide](SIMULATION.md) for the scenarios, persistent database, table descriptions and synthetic CSV export.
+Configure `.env` as above, install Docker Desktop, and stop any local app already using port 3000. Then:
+
+```powershell
+docker compose up --build -d app
+docker compose logs -f app
+```
+
+Open **http://127.0.0.1:3000**. SQLite persists in the named `sync_data` Docker volume, rather than the host's `data/sync.sqlite`. The container listens on all container interfaces; the published host port remains bound to localhost. The `.env` file, Git history, dependencies and generated data are excluded from the build context. Credentials are passed at runtime.
+
+Run the Python exporter in its own container:
+
+```powershell
+docker compose --profile tools run --rm export
+```
+
+The CSV appears at `data/deals-last-7-days.csv` on the host. To start the optional n8n service:
+
+```powershell
+docker compose --profile automation up -d n8n
+```
+
+Import and configure the two JSON exports as described in the [n8n guide](n8n/README.md). To stop the stack while retaining its data, use `docker compose --profile automation down`. Do not add `--volumes` unless you intend to erase the stored data.
+
+## How it works
 
 ```text
 Store / signed sample sender
@@ -112,6 +136,7 @@ Successful or duplicate syncs return HTTP 200; sync failures return 502 and rema
 - Contact and deal IDs are saved immediately. If association fails, retry reuses the deal.
 - Before creating a deal, the app searches for the exact name `Order <order_id>`, helping recover from previous uncertain requests. Do not rename these deals or create unrelated deals with this naming convention.
 - Safe API calls retry 429, 5xx, and network failures up to three times after the first call. Backoff is 1, 2, and 4 seconds; `Retry-After` overrides this when supplied.
+- Ambiguous Deal-creation failures are reconciled by searching for an existing Deal on the next webhook or manual retry before any further creation is considered. A missing search result alone does not clear uncertainty, because indexing can be delayed.
 - Creation calls retry explicit 429 rejections, but do **not** blindly retry 5xx, HTTP 408, or network timeouts: the record may already exist. Contact retries recover through email lookup; deals persist an uncertain flag before creation. Failed attempts store a readable error and are also logged to the console.
 - If a deal create has an uncertain result, wait for HubSpot's search index, then click **Retry**. A discovered deal is reused. If none appears, the app refuses another create to avoid duplicates. If HubSpot confirms no deal was created, stop the server, back up `data/sync.sqlite`, and clear that order's `uncertain` flag using a SQLite editor (`UPDATE orders SET uncertain=0 WHERE order_id='YOUR-ORDER-ID';`). Restart and retry. Never clear it without checking HubSpot.
 - On restart, unfinished attempts are marked failed for manual retry. Start only **one app process per database**.
@@ -153,6 +178,6 @@ For a live smoke test: send the sample twice, confirm one deal with the correct 
 - HMAC header format is defined here because the brief does not prescribe it.
 - Keep the SQLite database and credentials local. Payloads contain test customer details.
 - With more time: a durable background job queue, authenticated dashboard, distributed locking, a unique HubSpot order-ID property for stronger remote idempotency, timestamped webhook signatures, automatic reconciliation, date-window splitting for large exports, and hosted HTTPS deployment.
-- Optional n8n and Docker bonuses are omitted to keep the project simple. Focused automated tests are included.
+- Optional bonuses include importable n8n sync/error workflows, Docker Compose, and automated tests. The n8n alternative uses a unique Deal property for safe upsert retries; see its setup guide. Docker/n8n engine execution and live HubSpot verification remain separate checks.
 
 API references: [HubSpot deals](https://developers.hubspot.com/docs/api-reference/crm-deals-v3/guide), [CRM search](https://developers.hubspot.com/docs/api-reference/search/guide), [associations v4](https://developers.hubspot.com/docs/api-reference/crm-associations-v4/guide), [Node SQLite](https://nodejs.org/api/sqlite.html).

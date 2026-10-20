@@ -1,0 +1,306 @@
+{
+  "name": "Stage 2 - Signed orders to HubSpot",
+  "active": false,
+  "nodes": [
+    {
+      "id": "order-webhook",
+      "name": "Order webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "stage2-orders",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "webhookId": "stage2-orders"
+    },
+    {
+      "id": "validate-order",
+      "name": "Validate order",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return await (async function validateOrder() {\n  const { createHmac, timingSafeEqual } = require('crypto');\n  const secret = $env.WEBHOOK_SECRET;\n  if (!secret || secret.startsWith('replace-with-')) throw new Error('Configure WEBHOOK_SECRET before activating this workflow.');\n  const raw = await this.helpers.getBinaryDataBuffer(0, 'data');\n  const reject = (statusCode, error) => [{ json: { valid: false, statusCode, error } }];\n  if (raw.length > 1024 * 1024) return reject(413, 'Payload exceeds 1 MB.');\n  const signature = $input.first().json.headers['x-webhook-signature'];\n  if (typeof signature !== 'string' || !/^[a-fA-F0-9]{64}$/.test(signature)) return reject(401, 'Invalid signature.');\n  const expected = createHmac('sha256', secret).update(raw).digest();\n  if (!timingSafeEqual(expected, Buffer.from(signature, 'hex'))) return reject(401, 'Invalid signature.');\n  let o;\n  try { o = JSON.parse(raw.toString('utf8')); } catch { return reject(400, 'Invalid JSON.'); }\n  const text = v => typeof v === 'string' && v.trim().length > 0;\n  const money = v => typeof v === 'number' && Number.isFinite(v) && v >= 0;\n  if (!o || o.event !== 'order.created' || !text(o.order_id) || o.order_id.length > 100 ||\n      !text(o.created_at) || !Number.isFinite(Date.parse(o.created_at)) ||\n      !o.customer || !text(o.customer.email) || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(o.customer.email) ||\n      !text(o.customer.first_name) || !text(o.customer.last_name) || !text(o.customer.phone) ||\n      !Array.isArray(o.items) || !o.items.length ||\n      !o.items.every(i => i && text(i.sku) && text(i.name) && Number.isInteger(i.qty) && i.qty > 0 && money(i.price)) ||\n      !text(o.currency) || !/^[A-Z]{3}$/.test(o.currency) || !money(o.total)) return reject(400, 'Invalid order payload.');\n  return [{ json: { valid: true, order: o } }];\n}).call(this);"
+      }
+    },
+    {
+      "id": "valid-request",
+      "name": "Valid request",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "valid",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "reject-request",
+      "name": "Reject request",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        660,
+        220
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: $json.error }) }}",
+        "options": {
+          "responseCode": "={{ $json.statusCode }}"
+        }
+      }
+    },
+    {
+      "id": "upsert-contact",
+      "name": "Upsert contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        -80
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/0-1/batch/upsert",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ inputs: [{ idProperty: 'email', id: $('Validate order').first().json.order.customer.email.toLowerCase(), properties: { email: $('Validate order').first().json.order.customer.email.toLowerCase(), firstname: $('Validate order').first().json.order.customer.first_name, lastname: $('Validate order').first().json.order.customer.last_name, phone: $('Validate order').first().json.order.customer.phone } }] }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "check-contact",
+      "name": "Check contact",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        -80
+      ],
+      "parameters": {
+        "jsCode": "const r = $input.first().json; if (r.numErrors || r.errors?.length || !r.results?.[0]?.id) throw new Error('Contact upsert failed; inspect execution.'); return [{json: {contactId: r.results[0].id}}];"
+      }
+    },
+    {
+      "id": "upsert-deal",
+      "name": "Upsert deal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        -80
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/0-3/batch/upsert",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ inputs: [{ idProperty: 'store_order_id', id: $('Validate order').first().json.order.order_id, properties: { store_order_id: $('Validate order').first().json.order.order_id, dealname: 'Order ' + $('Validate order').first().json.order.order_id, amount: String($('Validate order').first().json.order.total), closedate: new Date($('Validate order').first().json.order.created_at).toISOString(), pipeline: $env.HUBSPOT_PIPELINE || 'default', dealstage: $env.HUBSPOT_DEAL_STAGE || 'closedwon' } }] }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "check-deal",
+      "name": "Check deal",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        -80
+      ],
+      "parameters": {
+        "jsCode": "const r = $input.first().json; if (r.numErrors || r.errors?.length || !r.results?.[0]?.id) throw new Error('Deal upsert failed; inspect execution.'); return [{json: {dealId: r.results[0].id}}];"
+      }
+    },
+    {
+      "id": "associate-contact",
+      "name": "Associate contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        -80
+      ],
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ 'https://api.hubapi.com/crm/v4/objects/deals/' + encodeURIComponent($('Check deal').first().json.dealId) + '/associations/default/contacts/' + encodeURIComponent($('Check contact').first().json.contactId) }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "success-response",
+      "name": "Success response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1760,
+        -80
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'success', order_id: $('Validate order').first().json.order.order_id, contact_id: $('Check contact').first().json.contactId, deal_id: $('Check deal').first().json.dealId }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Order webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate order": {
+      "main": [
+        [
+          {
+            "node": "Valid request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid request": {
+      "main": [
+        [
+          {
+            "node": "Upsert contact",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert contact": {
+      "main": [
+        [
+          {
+            "node": "Check contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check contact": {
+      "main": [
+        [
+          {
+            "node": "Upsert deal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert deal": {
+      "main": [
+        [
+          {
+            "node": "Check deal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check deal": {
+      "main": [
+        [
+          {
+            "node": "Associate contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Associate contact": {
+      "main": [
+        [
+          {
+            "node": "Success response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  }
+}
